@@ -1,0 +1,54 @@
+{
+  "name": "@vishal-keshri/swagger-ts-generator",
+  "version": "1.0.0",
+  "description": "Automatically scan TypeScript projects and generate Swagger/OpenAPI documentation with Zod, Joi, and Class-Validator support",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "swagger-scan": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "swagger",
+    "openapi",
+    "typescript",
+    "zod",
+    "joi",
+    "class-validator",
+    "api-documentation",
+    "express",
+    "fastify",
+    "nestjs"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vishal-KESHRI/swagger-ts-generator.git"
+  },
+  "dependencies": {
+    "commander": "^11.0.0",
+    "glob": "^10.3.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.5",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
