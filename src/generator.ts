@@ -41,8 +41,9 @@ export class SwaggerGenerator {
       operation.responses = {};
       Object.keys(route.validation.responses).forEach(statusCode => {
         const responseSchema = this.convertValidationToSchema(route.validation!.responses![statusCode], route.validation!.type);
+        const responseDescription = this.extractResponseDescription(route.validation!.responses![statusCode], statusCode, route.validation!.type);
         operation.responses[statusCode] = {
-          description: statusCode === '200' ? 'Success' : `Response ${statusCode}`,
+          description: responseDescription,
           content: {
             'application/json': {
               schema: responseSchema
@@ -53,7 +54,7 @@ export class SwaggerGenerator {
     } else {
       operation.responses = {
         '200': {
-          description: 'Success',
+          description: 'Successful response',
           content: {
             'application/json': {
               schema: { type: 'object' }
@@ -135,6 +136,74 @@ export class SwaggerGenerator {
       return ClassValidatorToSwagger.convert(validation);
     }
     return { type: 'object' };
+  }
+
+  private extractResponseDescription(validation: any, statusCode: string, type: 'zod' | 'joi' | 'class-validator'): string {
+    // Try to extract description from schema comments or descriptions
+    const schemaDescription = this.getSchemaDescription(validation, type);
+    if (schemaDescription) {
+      return schemaDescription;
+    }
+
+    // Default descriptions based on status code
+    const statusDescriptions: Record<string, string> = {
+      '200': 'Successful response',
+      '201': 'Resource created successfully',
+      '204': 'No content',
+      '400': 'Bad request',
+      '401': 'Unauthorized',
+      '403': 'Forbidden',
+      '404': 'Resource not found',
+      '409': 'Conflict',
+      '422': 'Validation error',
+      '500': 'Internal server error'
+    };
+
+    return statusDescriptions[statusCode] || `Response ${statusCode}`;
+  }
+
+  private getSchemaDescription(validation: any, type: 'zod' | 'joi' | 'class-validator'): string | null {
+    if (typeof validation !== 'string') return null;
+
+    // Extract description from Zod schema - get the last .describe() which is usually the main schema
+    if (type === 'zod') {
+      const zodDescMatches = validation.match(/\.describe\(['"`]([^'"`]+)['"`]\)/g);
+      if (zodDescMatches && zodDescMatches.length > 0) {
+        const lastMatch = zodDescMatches[zodDescMatches.length - 1];
+        const descMatch = lastMatch.match(/\.describe\(['"`]([^'"`]+)['"`]\)/);
+        if (descMatch) return descMatch[1];
+      }
+    }
+
+    // Extract description from Joi schema - get the last .description()
+    if (type === 'joi') {
+      const joiDescMatches = validation.match(/\.description\(['"`]([^'"`]+)['"`]\)/g);
+      if (joiDescMatches && joiDescMatches.length > 0) {
+        const lastMatch = joiDescMatches[joiDescMatches.length - 1];
+        const descMatch = lastMatch.match(/\.description\(['"`]([^'"`]+)['"`]\)/);
+        if (descMatch) return descMatch[1];
+      }
+    }
+
+    // Extract from JSDoc comments
+    const jsdocMatch = validation.match(/\/\*\*\s*([^*]+?)\s*\*\//); 
+    if (jsdocMatch) {
+      return jsdocMatch[1].trim();
+    }
+
+    // Extract from block comments
+    const blockMatch = validation.match(/\/\*\s*([^*]+?)\s*\*\//); 
+    if (blockMatch) {
+      return blockMatch[1].trim();
+    }
+
+    // Extract from inline comments
+    const inlineMatch = validation.match(/\/\/\s*(.+)$/);
+    if (inlineMatch) {
+      return inlineMatch[1].trim();
+    }
+
+    return null;
   }
 
   private normalizePath(path: string): string {

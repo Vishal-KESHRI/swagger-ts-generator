@@ -1,7 +1,7 @@
 {
-  "name": "@vishal-keshri/swagger-ts-generator",
-  "version": "1.0.0",
-  "description": "Automatically scan TypeScript projects and generate Swagger/OpenAPI documentation with Zod, Joi, and Class-Validator support",
+  "name": "swagger-genius",
+  "version": "1.2.0",
+  "description": "🚀 Instantly generate Swagger/OpenAPI 3.0 API contracts from your TypeScript code. Zero config, supports Zod/Joi/Class-Validator schemas, works with Express/Fastify/NestJS. Perfect swagger.json files in seconds!",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -25,11 +25,16 @@
     "fastify",
     "nestjs"
   ],
-  "author": "Your Name",
+  "author": "Vishal Keshri <vishal.keshri@example.com>",
   "license": "MIT",
+  "stability": "stable",
   "repository": {
     "type": "git",
     "url": "https://github.com/Vishal-KESHRI/swagger-ts-generator.git"
+  },
+  "homepage": "https://github.com/Vishal-KESHRI/swagger-ts-generator#readme",
+  "bugs": {
+    "url": "https://github.com/Vishal-KESHRI/swagger-ts-generator/issues"
   },
   "dependencies": {
     "commander": "^11.0.0",

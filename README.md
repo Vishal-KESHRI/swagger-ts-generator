@@ -1,35 +1,46 @@
-# Swagger TypeScript Generator
+# Swagger Genius 🚀
 
-Automatically generate Swagger/OpenAPI documentation from your TypeScript code with Zod, Joi, and Class-Validator support.
+**Instantly generate perfect Swagger/OpenAPI 3.0 API contracts from your TypeScript code!**
 
-## What it does
+Zero configuration. Just point it at your code and get production-ready `swagger.json` files in seconds. Works with any validation library and web framework.
 
-✅ Scans your TypeScript files for API routes  
-✅ Extracts validation schemas (Zod, Joi, Class-Validator)  
-✅ Generates complete OpenAPI 3.0 documentation  
-✅ Supports Express, Fastify, NestJS, @JsonController  
-✅ Works with schemas in separate files  
-✅ Detects response types from TypeScript  
+## 🎯 What Swagger Genius Does
+
+🔍 **Scans your TypeScript code** - Finds all API routes automatically  
+📜 **Extracts validation schemas** - Zod, Joi, Class-Validator support  
+🚀 **Generates perfect API contracts** - Complete OpenAPI 3.0 `swagger.json`  
+🌐 **Works with any framework** - Express, Fastify, NestJS, @JsonController  
+📁 **Cross-file schema resolution** - Imports from separate schema files  
+🎯 **TypeScript response detection** - Automatically maps return types  
 
 ## Installation
 
 ```bash
-npm install @vishal-keshri/swagger-ts-generator
+npm install swagger-genius
 ```
 
-## Quick Start
+## ⚡ Quick Start (30 seconds)
 
-**Step 1:** Create config file
+**1️⃣ Initialize:**
 ```bash
 npx swagger-scan init
 ```
 
-**Step 2:** Generate documentation
+**2️⃣ Generate API contract:**
 ```bash
 npx swagger-scan generate
 ```
 
-**Done!** Your `swagger.json` file is ready.
+**🎉 Done!** Your perfect `swagger.json` API contract is ready to use!
+
+## 💪 Why Choose Swagger Genius?
+
+🚀 **Zero Configuration** - Works out of the box, no setup needed  
+⚡ **Lightning Fast** - Generate docs in seconds, not hours  
+🔒 **Type Safe** - Leverages TypeScript for accurate API contracts  
+🌐 **Framework Agnostic** - Works with Express, Fastify, NestJS, and more  
+📁 **Smart Schema Detection** - Finds schemas across multiple files  
+🎯 **Production Ready** - Generates OpenAPI 3.0 compliant documentation  
 
 ## Configuration
 
@@ -219,7 +230,7 @@ swagger-scan generate -t "My API" -v "2.0.0"
 ## Programmatic Usage
 
 ```typescript
-import { SwaggerScanner } from '@vishal-keshri/swagger-ts-generator';
+import { SwaggerScanner } from 'swagger-genius';
 
 const scanner = new SwaggerScanner();
 
