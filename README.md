@@ -16,7 +16,11 @@ Zero configuration. Just point it at your code and get production-ready `swagger
 ## Installation
 
 ```bash
-npm install swagger-genius
+# Install as dev dependency (recommended)
+npm install --save-dev swagger-genius
+
+# Or install globally
+npm install -g swagger-genius
 ```
 
 ## ⚡ Quick Start (30 seconds)
