@@ -5,6 +5,7 @@ export interface SwaggerConfig {
   baseUrl?: string;
   outputPath: string;
   scanPaths: string[];
+  openApiVersion?: '2.0' | '3.0.0' | '3.0.1' | '3.0.2' | '3.0.3' | '3.1.0';
 }
 
 export interface RouteInfo {
@@ -37,15 +38,22 @@ export interface SwaggerPath {
 }
 
 export interface SwaggerSpec {
-  openapi: string;
+  openapi?: string;
+  swagger?: string;
   info: {
     title: string;
     version: string;
     description?: string;
   };
   servers?: Array<{ url: string }>;
+  host?: string;
+  basePath?: string;
+  schemes?: string[];
+  consumes?: string[];
+  produces?: string[];
   paths: Record<string, SwaggerPath>;
-  components: {
+  components?: {
     schemas: Record<string, any>;
   };
+  definitions?: Record<string, any>;
 }

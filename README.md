@@ -53,7 +53,8 @@ The `swagger-scan.json` file created by `init` command:
   "description": "API documentation",
   "baseUrl": "http://localhost:3000",
   "outputPath": "swagger.json",
-  "scanPaths": ["src"]
+  "scanPaths": ["src"],
+  "openApiVersion": "3.0.0"
 }
 ```
 

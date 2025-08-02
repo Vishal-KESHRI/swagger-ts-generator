@@ -3,8 +3,24 @@ import { ZodToSwagger, JoiToSwagger, ClassValidatorToSwagger } from './validator
 
 export class SwaggerGenerator {
   generate(config: SwaggerConfig, routes: RouteInfo[]): SwaggerSpec {
-    const spec: SwaggerSpec = {
-      openapi: '3.0.0',
+    const openApiVersion = config.openApiVersion || '3.0.0';
+    
+    const spec: SwaggerSpec = openApiVersion === '2.0' ? {
+      swagger: '2.0',
+      info: {
+        title: config.title,
+        version: config.version,
+        description: config.description
+      },
+      host: config.baseUrl ? new URL(config.baseUrl).host : undefined,
+      basePath: config.baseUrl ? new URL(config.baseUrl).pathname : undefined,
+      schemes: config.baseUrl ? [new URL(config.baseUrl).protocol.slice(0, -1)] : ['http'],
+      consumes: ['application/json'],
+      produces: ['application/json'],
+      paths: {},
+      definitions: {}
+    } as any : {
+      openapi: openApiVersion,
       info: {
         title: config.title,
         version: config.version,
