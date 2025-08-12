@@ -24,6 +24,7 @@ export interface ValidationSchema {
   params?: any;
   headers?: any;
   responses?: Record<string, any>;
+  properties?: Record<string, any>;
 }
 
 export interface SwaggerPath {

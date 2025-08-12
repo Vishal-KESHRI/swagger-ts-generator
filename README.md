@@ -1,59 +1,51 @@
-# Swagger Genius 🚀
+# Swagger Genius
 
-**Instantly generate perfect Swagger/OpenAPI 3.0 API contracts from your TypeScript code!**
+**Automatically generate comprehensive OpenAPI 3.0 specifications from TypeScript code with zero configuration.**
 
-Zero configuration. Just point it at your code and get production-ready `swagger.json` files in seconds. Works with any validation library and web framework.
+Swagger Genius analyzes your TypeScript codebase to extract API routes, validation schemas, and type definitions, generating production-ready `swagger.json` files with complete documentation including descriptions, validation rules, and response schemas.
 
-## 🎯 What Swagger Genius Does
+## Features
 
-🔍 **Scans your TypeScript code** - Finds all API routes automatically  
-📜 **Extracts validation schemas** - Zod, Joi, Class-Validator support  
-🚀 **Generates perfect API contracts** - Complete OpenAPI 3.0 `swagger.json`  
-🌐 **Works with any framework** - Express, Fastify, NestJS, @JsonController  
-📁 **Cross-file schema resolution** - Imports from separate schema files  
-🎯 **TypeScript response detection** - Automatically maps return types  
+- **Zero Configuration**: Works out of the box with sensible defaults
+- **Framework Agnostic**: Supports Express, Fastify, NestJS, and routing-controllers
+- **Multiple Validation Libraries**: Zod, Joi, and class-validator support
+- **TypeScript Integration**: Extracts types, interfaces, and JSDoc comments
+- **Cross-File Resolution**: Automatically resolves imported schemas and types
+- **Complete OpenAPI 3.0**: Generates fully compliant specifications
+- **Production Ready**: Handles complex validation rules and nested schemas
 
 ## Installation
 
 ```bash
-# Install as dev dependency (recommended)
+# Install as development dependency (recommended)
 npm install --save-dev swagger-genius
 
 # Or install globally
 npm install -g swagger-genius
 ```
 
-## ⚡ Quick Start (30 seconds)
+## Quick Start
 
-**1️⃣ Initialize:**
+**Initialize configuration:**
 ```bash
 npx swagger-scan init
 ```
 
-**2️⃣ Generate API contract:**
+**Generate API documentation:**
 ```bash
 npx swagger-scan generate
 ```
 
-**🎉 Done!** Your perfect `swagger.json` API contract is ready to use!
-
-## 💪 Why Choose Swagger Genius?
-
-🚀 **Zero Configuration** - Works out of the box, no setup needed  
-⚡ **Lightning Fast** - Generate docs in seconds, not hours  
-🔒 **Type Safe** - Leverages TypeScript for accurate API contracts  
-🌐 **Framework Agnostic** - Works with Express, Fastify, NestJS, and more  
-📁 **Smart Schema Detection** - Finds schemas across multiple files  
-🎯 **Production Ready** - Generates OpenAPI 3.0 compliant documentation  
+Your `swagger.json` file will be generated with complete API documentation.
 
 ## Configuration
 
-The `swagger-scan.json` file created by `init` command:
+The `swagger-scan.json` configuration file:
 
 ```json
 {
   "title": "My API",
-  "version": "1.0.0", 
+  "version": "1.0.0",
   "description": "API documentation",
   "baseUrl": "http://localhost:3000",
   "outputPath": "swagger.json",
@@ -62,175 +54,426 @@ The `swagger-scan.json` file created by `init` command:
 }
 ```
 
-### Environment Variables (Optional)
+### Environment Variables
 
-```bash
-# Change output location
-export SWAGGER_OUTPUT_PATH="/custom/path/swagger.json"
-
-# Scan different folders  
-export SWAGGER_SCAN_PATHS="src,controllers,routes"
-
-npx swagger-scan generate
-```
+| Variable | Description |
+|----------|-------------|
+| `SWAGGER_OUTPUT_PATH` | Override output file path |
+| `SWAGGER_SCAN_PATHS` | Comma-separated list of directories to scan |
 
 ## Supported Frameworks
 
 ### Express
+
 ```typescript
-app.post('/users', userSchema, (req, res) => {
+import { CreateUserSchema } from './schemas/user';
+
+app.post('/users', validateBody(CreateUserSchema), (req, res) => {
   res.json({ user: req.body });
 });
 ```
 
-### @JsonController
+### Fastify
+
 ```typescript
-@JsonController('/api')
+import { CreateUserSchema } from './schemas/user';
+
+fastify.post('/users', {
+  schema: { body: CreateUserSchema }
+}, handler);
+```
+
+### NestJS with routing-controllers
+
+```typescript
+import { CreateUserDto } from './dto/user.dto';
+import { UserResponse } from './types/user.types';
+
+@JsonController('/api/users')
 export class UserController {
-  @Post('/users')
-  @UseBefore(
-    RequestValidatorMiddleware({
-      body: CreateUserSchema,
-      query: QueryParamsSchema,
-      headers: HeadersSchema
-    })
-  )
-  async createUser(): Promise<express.Response<UserResponse>> {
-    // Your logic
+  @Post('/')
+  @UseBefore(RequestValidatorMiddleware.validate(CreateUserSchema))
+  async createUser(@Body() userData: CreateUserDto): Promise<UserResponse> {
+    return this.userService.create(userData);
   }
 }
 ```
 
-### Fastify
+## Schema Support
+
+### Zod Schemas
+
 ```typescript
-fastify.post('/users', {
-  schema: { body: userSchema }
-}, handler);
+import { z } from 'zod';
+
+export const CreateUserSchema = z.object({
+  /** User's full name */
+  name: z.string().min(1).describe('User full name'),
+  /** User email address */
+  email: z.string().email().describe('User email address'),
+  /** User age - must be 18 or older */
+  age: z.number().min(18).describe('User age (minimum 18)'),
+  /** User phone number */
+  phone: z.string().optional().describe('User phone number')
+});
 ```
 
-### NestJS
+### Joi Schemas
+
 ```typescript
-@Post('/users')
-@Body(CreateUserDto)
-async createUser(@Body() body: CreateUserDto) {
-  // Handler
+import Joi from 'joi';
+
+export const CreateUserSchema = Joi.object({
+  /** User's full name */
+  name: Joi.string().required().description('User full name'),
+  /** User email address */
+  email: Joi.string().email().description('User email address'),
+  /** User age - must be 18 or older */
+  age: Joi.number().min(18).description('User age (minimum 18)'),
+  /** User phone number */
+  phone: Joi.string().description('User phone number')
+});
+```
+
+### Class-Validator DTOs
+
+```typescript
+import { IsString, IsEmail, IsNumber, Min, IsOptional } from 'class-validator';
+
+export class CreateUserDto {
+  /** User's full name */
+  @IsString()
+  name: string;
+
+  /** User email address */
+  @IsEmail()
+  email: string;
+
+  /** User age - must be 18 or older */
+  @IsNumber()
+  @Min(18)
+  age: number;
+
+  /** User phone number */
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }
 ```
 
-## Schema Examples
+## TypeScript Type Support
 
-### Zod
+### Interfaces
+
 ```typescript
-const userSchema = z.object({
+export interface UserResponse {
+  /** Unique user identifier */
+  id: string;
   /** User's full name */
-  name: z.string().describe('User full name'),
-  email: z.string().email(), // User email
-  /* Must be 18 or older */
+  name: string;
+  /** User email address */
+  email: string;
+  /** User age */
+  age: number;
+  /** User phone number */
+  phone?: string;
+  /** Account creation timestamp */
+  createdAt: string;
+  /** Last update timestamp */
+  updatedAt: string;
+}
+```
+
+### Type Aliases
+
+```typescript
+export type CreateUserRequest = {
+  /** User's full name */
+  name: string;
+  /** User email address */
+  email: string;
+  /** User age - must be 18 or older */
+  age: number;
+  /** User phone number */
+  phone?: string;
+};
+
+export type UserStatus = 'active' | 'inactive' | 'pending';
+```
+
+### Generic Types
+
+```typescript
+export type ApiResponse<T> = {
+  /** Response data */
+  data: T;
+  /** Success indicator */
+  success: boolean;
+  /** Response message */
+  message?: string;
+};
+```
+
+## Comment Types and Description Sources
+
+Swagger Genius extracts property descriptions from multiple comment formats to generate comprehensive API documentation.
+
+### Supported Comment Types
+
+#### JSDoc Comments (Recommended)
+
+```typescript
+export const CreateUserSchema = z.object({
+  /** User's full name */
+  name: z.string().min(1),
+  /** User email address */
+  email: z.string().email(),
+  /** User age - must be 18 or older */
   age: z.number().min(18)
 });
 ```
 
-### Joi  
+#### Schema Method Descriptions
+
+**Zod .describe() Method:**
 ```typescript
-const userSchema = Joi.object({
-  /** User's full name */
-  name: Joi.string().required().description('User full name'),
-  email: Joi.string().email(), // User email
-  /* Must be 18 or older */
-  age: Joi.number().min(18)
+export const CreateUserSchema = z.object({
+  name: z.string().min(1).describe('User full name'),
+  email: z.string().email().describe('User email address'),
+  age: z.number().min(18).describe('User age (minimum 18)')
 });
 ```
 
-### Class-Validator
+**Joi .description() Method:**
 ```typescript
-export class CreateUserDto {
+export const CreateUserSchema = Joi.object({
+  name: Joi.string().required().description('User full name'),
+  email: Joi.string().email().description('User email address'),
+  age: Joi.number().min(18).description('User age (minimum 18)')
+});
+```
+
+#### Combined Approach (Best Practice)
+
+```typescript
+export const CreateUserSchema = z.object({
   /** User's full name */
-  @IsString()
-  name: string; // Full name
+  name: z.string().min(1).describe('User full name'),
+  /** User email address */
+  email: z.string().email().describe('User email address')
+});
+```
 
-  @IsEmail()
-  email: string; // Email address
 
-  /* Must be 18 or older */
-  @IsNumber()
-  @Min(18) 
-  age: number;
+
+## Code Quality and Linting
+
+### ESLint Configuration
+
+Install and configure JSDoc linting for consistent documentation:
+
+```bash
+npm install --save-dev eslint-plugin-jsdoc
+```
+
+**.eslintrc.json:**
+```json
+{
+  "extends": ["plugin:jsdoc/recommended"],
+  "rules": {
+    "jsdoc/require-description": "error",
+    "jsdoc/require-param-description": "error",
+    "jsdoc/require-returns-description": "error",
+    "jsdoc/check-descriptions": "error",
+    "jsdoc/require-jsdoc": [
+      "error",
+      {
+        "require": {
+          "FunctionDeclaration": false,
+          "MethodDefinition": false,
+          "ClassDeclaration": false,
+          "ArrowFunctionExpression": false,
+          "FunctionExpression": false
+        }
+      }
+    ]
+  }
 }
 ```
 
-## Description Sources
+### Prettier Configuration
 
-The library extracts property descriptions from:
-
-- **JSDoc comments:** `/** Description */`
-- **Block comments:** `/* Description */`
-- **Inline comments:** `// Description`
-- **Zod `.describe()`:** `z.string().describe('Description')`
-- **Joi `.description()`:** `Joi.string().description('Description')`
-
-## Cross-File Support
-
-**Controller:** `controllers/user.controller.ts`
-```typescript
-import { CreateUserSchema, UserResponse } from '../schemas/user.schemas';
-
-app.post('/users', CreateUserSchema, (req, res) => {
-  res.json({ user: req.body });
-});
+**.prettierrc:**
+```json
+{
+  "printWidth": 80,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "as-needed",
+  "trailingComma": "es5"
+}
 ```
 
-**Schema:** `schemas/user.schemas.ts`
-```typescript
-export const CreateUserSchema = z.object({
-  name: z.string().describe('User name'),
-  email: z.string().email()
-});
+### Pre-commit Hooks
 
-export const UserResponse = z.object({
-  id: z.string(),
-  name: z.string(), 
-  email: z.string()
-});
-```
-
-## Response Types
-
-Automatically detects response schemas from TypeScript:
-
-```typescript
-// Detects TUserResponse type and finds UserResponseSchema
-async getUser(): Promise<express.Response<TUserResponse>> {
-  return res.json(data);
+**package.json:**
+```json
+{
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write",
+      "git add"
+    ]
+  }
 }
 ```
 
 ## CLI Commands
 
 ```bash
-# Create config file
+# Initialize configuration file
 swagger-scan init
 
 # Generate swagger.json
 swagger-scan generate
 
-# Custom options
-swagger-scan generate -c my-config.json
-swagger-scan generate -o api.yaml
+# Custom configuration file
+swagger-scan generate -c custom-config.json
+
+# Custom output path
+swagger-scan generate -o api-docs.json
+
+# Custom scan paths
 swagger-scan generate -p "src,controllers"
+
+# Custom title and version
 swagger-scan generate -t "My API" -v "2.0.0"
 ```
 
-## What Gets Generated
+## Generated Output
 
-✅ Request body schemas  
-✅ Query parameters with validation  
-✅ Header parameters  
-✅ Path parameters  
-✅ Response schemas from TypeScript types  
-✅ Nested objects and arrays  
-✅ Optional/required fields  
-✅ Validation rules (min/max, email, etc.)  
-✅ Descriptions from comments  
+### Request Schema Example
+
+```json
+{
+  "CreateUserRequest": {
+    "type": "object",
+    "required": ["name", "email", "age"],
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "User's full name"
+      },
+      "email": {
+        "type": "string",
+        "format": "email",
+        "description": "User email address"
+      },
+      "age": {
+        "type": "number",
+        "minimum": 18,
+        "description": "User age (minimum 18)"
+      },
+      "phone": {
+        "type": "string",
+        "description": "User phone number"
+      }
+    }
+  }
+}
+```
+
+### Complete API Endpoint
+
+```json
+{
+  "/api/users": {
+    "post": {
+      "summary": "Create user",
+      "description": "Create a new user with the provided information",
+      "requestBody": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CreateUserRequest"
+            }
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "User created successfully",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserResponse"
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Validation error",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ErrorResponse"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Cross-File Schema Resolution
+
+Swagger Genius automatically resolves schemas and types across multiple files:
+
+**controllers/user.controller.ts:**
+```typescript
+import { CreateUserSchema, UserResponse } from '../schemas/user.schemas';
+import { RequestValidatorMiddleware } from '../middleware/validation';
+
+@JsonController('/api/users')
+export class UserController {
+  @Post('/')
+  @UseBefore(RequestValidatorMiddleware.validate(CreateUserSchema))
+  async createUser(@Body() userData: CreateUserDto): Promise<UserResponse> {
+    return this.userService.create(userData);
+  }
+}
+```
+
+**schemas/user.schemas.ts:**
+```typescript
+export const CreateUserSchema = z.object({
+  /** User's full name */
+  name: z.string().describe('User name'),
+  /** User email address */
+  email: z.string().email().describe('User email')
+});
+
+export interface UserResponse {
+  /** Unique user identifier */
+  id: string;
+  /** User's full name */
+  name: string;
+  /** User email address */
+  email: string;
+}
+```
 
 ## Programmatic Usage
 
@@ -247,66 +490,88 @@ await scanner.generateSwagger({
 });
 ```
 
-## Example Output
+## Troubleshooting
 
+### Descriptions Not Appearing
+
+**Check Comment Format:**
+```typescript
+// Incorrect - single asterisk
+/* User name */
+name: z.string()
+
+// Correct - double asterisk JSDoc
+/** User name */
+name: z.string()
+```
+
+**Verify Schema Export:**
+```typescript
+// Incorrect - not exported
+const CreateUserSchema = z.object({...});
+
+// Correct - exported
+export const CreateUserSchema = z.object({...});
+```
+
+**Check Scan Paths:**
 ```json
 {
-  "openapi": "3.0.0",
-  "info": {
-    "title": "My API",
-    "version": "1.0.0"
-  },
-  "paths": {
-    "/users": {
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "description": "User full name"
-                  },
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  }
-                },
-                "required": ["name", "email"]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {"type": "string"},
-                    "name": {"type": "string"}
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  "scanPaths": [
+    "src/schemas",
+    "src/controllers",
+    "src/types"
+  ]
 }
 ```
 
-## Environment Variables
+### Validation Not Detected
 
-| Variable | Description |
-|----------|-------------|
-| `SWAGGER_OUTPUT_PATH` | Custom output file path |
-| `SWAGGER_SCAN_PATHS` | Folders to scan (comma-separated) |
+**Verify Middleware Pattern:**
+```typescript
+// Correct pattern
+@Post('/')
+@UseBefore(RequestValidatorMiddleware.validate(CreateUserSchema))
+async createUser(@Body() userData: CreateUserDto) {}
+```
+
+**Check Import Statements:**
+```typescript
+// Ensure proper imports
+import { CreateUserSchema } from '@/lib/validations';
+import { RequestValidatorMiddleware } from '@/middleware/validation';
+```
+
+### Debug Mode
+
+```bash
+# Enable debug logging
+DEBUG=swagger-scan npx swagger-scan generate
+
+# Verbose output
+npx swagger-scan generate --verbose
+```
+
+## What Gets Generated
+
+- Request body schemas with validation rules
+- Query parameters with type information
+- Path parameters with descriptions
+- Header parameters and validation
+- Response schemas from TypeScript return types
+- Nested objects and array definitions
+- Optional and required field specifications
+- Format validation (email, date, etc.)
+- Comprehensive error responses
 
 ## License
 
-MIT
+MIT License - see LICENSE file for details.
+
+## Contributing
+
+Contributions are welcome! Please read our contributing guidelines and submit pull requests to our GitHub repository.
+
+## Support
+
+For issues, feature requests, or questions, please visit our GitHub repository or contact our support team.

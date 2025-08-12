@@ -127,47 +127,68 @@ export class ProjectScanner {
   }
 
   private extractUseBefore(content: string, startIndex: number, imports: Map<string, string>, filePath: string): ValidationSchema | undefined {
-    // Look for @UseBefore with RequestValidatorMiddleware
-    const contextWindow = content.slice(startIndex, startIndex + 1500);
-    const useBeforeMatch = contextWindow.match(/@UseBefore\([\s\S]*?RequestValidatorMiddleware\(\{([\s\S]*?)\}\)[\s\S]*?\)/);
-    
     const validation: ValidationSchema = { type: 'zod' };
     
-    if (useBeforeMatch) {
-      const validationConfig = useBeforeMatch[1];
+    // Find the method definition after the decorator
+    const afterDecorator = content.slice(startIndex);
+    const methodMatch = afterDecorator.match(/async\s+(\w+)\s*\([^)]*\)/);
+    if (!methodMatch) return undefined;
+    
+    const methodName = methodMatch[1];
+    const methodStartIndex = startIndex + afterDecorator.indexOf(methodMatch[0]);
+    
+    // Look backwards from method to find its decorators
+    const beforeMethod = content.slice(Math.max(0, startIndex - 1000), methodStartIndex);
+    const lines = beforeMethod.split('\n');
+    
+    // Find decorators for this specific method (work backwards from method)
+    let foundUseBefore = false;
+    let foundBody = false;
+    
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
       
-      // Extract query, headers, body, response schemas
-      const queryMatch = validationConfig.match(/query:\s*(\w+)/);
-      const headersMatch = validationConfig.match(/headers:\s*(\w+)/);
-      const bodyMatch = validationConfig.match(/body:\s*(\w+)/);
-      const responseMatch = validationConfig.match(/response:\s*(\w+)/);
+      // Stop if we hit another method or class definition
+      if (line.includes('async ') && !line.includes(methodName)) break;
+      if (line.includes('class ')) break;
       
-      if (queryMatch) {
-        const schema = this.resolveSchema(queryMatch[1], content, imports, filePath);
-        if (schema) validation.query = schema.body;
+      // Look for @UseBefore
+      if (!foundUseBefore && line.includes('@UseBefore')) {
+        const useBeforeMatch = line.match(/@UseBefore\(RequestValidatorMiddleware\.validate\((\w+)\)/);
+        if (useBeforeMatch) {
+          const schemaName = useBeforeMatch[1];
+          const schema = this.resolveSchema(schemaName, content, imports, filePath);
+          if (schema) {
+            validation.body = schema.body;
+            validation.properties = schema.properties;
+            foundUseBefore = true;
+          }
+        }
       }
-      
-      if (headersMatch) {
-        const schema = this.resolveSchema(headersMatch[1], content, imports, filePath);
-        if (schema) validation.headers = schema.body;
-      }
-      
-      if (bodyMatch) {
-        const schema = this.resolveSchema(bodyMatch[1], content, imports, filePath);
-        if (schema) validation.body = schema.body;
-      }
-      
-      if (responseMatch) {
-        const schema = this.resolveSchema(responseMatch[1], content, imports, filePath);
-        if (schema) validation.responses = { '200': schema.body };
+    }
+    
+    // Extract @Body() parameter type from method signature
+    if (!foundBody) {
+      const methodSignature = content.slice(methodStartIndex, methodStartIndex + 500);
+      const bodyParamMatch = methodSignature.match(/@Body\(\)\s+\w+:\s*(\w+)/);
+      if (bodyParamMatch) {
+        const dtoName = bodyParamMatch[1];
+        const schema = this.resolveSchema(dtoName, content, imports, filePath);
+        if (schema && !validation.body) {
+          validation.body = schema.body;
+          validation.properties = schema.properties;
+        }
       }
     }
     
     // Extract response type from method signature
-    const responseType = this.extractResponseType(contextWindow);
-    if (responseType && !validation.responses) {
+    const methodSignature = content.slice(methodStartIndex, methodStartIndex + 500);
+    const responseType = this.extractResponseType(methodSignature);
+    if (responseType) {
       const schema = this.resolveSchema(responseType, content, imports, filePath);
-      if (schema) validation.responses = { '200': schema.body };
+      if (schema) {
+        validation.responses = { '200': schema.body };
+      }
     }
     
     return Object.keys(validation).length > 1 ? validation : undefined;
@@ -210,6 +231,28 @@ export class ProjectScanner {
       }
     }
     
+    // Try TypeScript interface/type definition
+    if (!schema) {
+      schema = this.findTypeScriptInterface(content, schemaName);
+      
+      // Try imported TypeScript types
+      if (!schema && imports.has(schemaName)) {
+        const importPath = imports.get(schemaName)!;
+        schema = this.loadExternalTypeScriptInterface(schemaName, importPath, filePath);
+      }
+    }
+    
+    // If no direct match, try schema variant (UserResponse -> UserResponseSchema)
+    if (!schema && !schemaName.endsWith('Schema')) {
+      const schemaVariant = schemaName + 'Schema';
+      schema = this.findSchemaDefinition(content, schemaVariant);
+      
+      if (!schema && imports.has(schemaVariant)) {
+        const importPath = imports.get(schemaVariant)!;
+        schema = this.loadExternalSchemaSync(schemaVariant, importPath, filePath);
+      }
+    }
+    
     return schema;
   }
 
@@ -228,97 +271,274 @@ export class ProjectScanner {
   }
 
   private findSchemaDefinition(content: string, schemaName: string): ValidationSchema | undefined {
-    // Simple approach: find the schema definition and extract until the closing bracket
+    // Find schema definition with better parsing - handle multiline
     const lines = content.split('\n');
     let schemaStartLine = -1;
-    let schemaType: 'zod' | 'joi' | 'class-validator' | null = null;
+    let schemaType: 'zod' | 'joi' | 'class-validator' = 'zod';
     
-    // Find the line where schema is defined
+    // Find the line where schema starts
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes(`const ${schemaName} =`)) {
+      if (lines[i].includes(`const ${schemaName} =`) || lines[i].includes(`export const ${schemaName} =`)) {
         schemaStartLine = i;
-        if (lines[i].includes('z.object')) {
+        if (lines[i].includes('z.object') || content.slice(content.indexOf(lines[i])).includes('z.object')) {
           schemaType = 'zod';
-        } else if (lines[i].includes('Joi.object')) {
+        } else if (lines[i].includes('Joi.object') || content.slice(content.indexOf(lines[i])).includes('Joi.object')) {
           schemaType = 'joi';
         }
-        break;
-      } else if (lines[i].includes(`class ${schemaName}`)) {
-        schemaStartLine = i;
-        schemaType = 'class-validator';
         break;
       }
     }
     
-    if (schemaStartLine === -1 || !schemaType) return undefined;
-    
-    // Handle class-validator differently
-    if (schemaType === 'class-validator') {
-      return this.extractClassValidation(content, schemaStartLine, lines);
+    if (schemaStartLine === -1) {
+      // Try class definition
+      return this.findClassDefinition(content, schemaName);
     }
     
-    // Extract the schema definition
+    // Extract the complete schema definition
     let schemaLines = [];
     let braceCount = 0;
-    let foundOpenBrace = false;
+    let parenCount = 0;
+    let foundStart = false;
     
     for (let i = schemaStartLine; i < lines.length; i++) {
       const line = lines[i];
       schemaLines.push(line);
       
-      // Count braces
+      // Count braces and parentheses
       for (const char of line) {
         if (char === '{') {
           braceCount++;
-          foundOpenBrace = true;
+          foundStart = true;
         } else if (char === '}') {
           braceCount--;
+        } else if (char === '(') {
+          parenCount++;
+        } else if (char === ')') {
+          parenCount--;
         }
       }
       
-      // If we've closed all braces and found at least one, we're done
-      if (foundOpenBrace && braceCount === 0) {
+      // Stop when we've closed all braces and parentheses, or hit a semicolon
+      if (foundStart && braceCount === 0 && parenCount === 0) {
+        break;
+      }
+      if (line.trim().endsWith(';')) {
         break;
       }
     }
     
-    const schemaText = schemaLines.join('\n');
-    // Extract the complete object definition
-    let objectStart = -1;
-    let objectEnd = -1;
+    const schemaDefinition = schemaLines.join('\n');
     
-    if (schemaType === 'zod') {
-      objectStart = schemaText.indexOf('z.object(');
-    } else {
-      objectStart = schemaText.indexOf('Joi.object(');
+    // Parse the schema to extract properties with descriptions
+    const properties = this.parseSchemaProperties(schemaDefinition, schemaType);
+    
+    return {
+      type: schemaType,
+      body: schemaDefinition,
+      properties
+    };
+  }
+  
+  private findClassDefinition(content: string, className: string): ValidationSchema | undefined {
+    const classRegex = new RegExp(`export\s+class\s+${className}[\s\S]*?\{([\s\S]*?)\n\}`, 'm');
+    const match = classRegex.exec(content);
+    
+    if (!match) return undefined;
+    
+    const classBody = match[1];
+    const properties = this.parseClassProperties(classBody);
+    
+    return {
+      type: 'class-validator',
+      body: match[0],
+      properties
+    };
+  }
+  
+  private parseSchemaProperties(schemaDefinition: string, type: 'zod' | 'joi'): any {
+    const properties: any = {};
+    
+    // Extract object content
+    const objectMatch = schemaDefinition.match(/(?:z|Joi)\.object\(\{([\s\S]*?)\}\)/);
+    if (!objectMatch) return properties;
+    
+    const objectContent = objectMatch[1];
+    
+    // Parse each property
+    const propertyRegex = /\/\*\*\s*([^*]+)\s*\*\/\s*([\w]+):\s*([^,}]+)/g;
+    let propMatch;
+    
+    while ((propMatch = propertyRegex.exec(objectContent)) !== null) {
+      const [, description, propName, propDefinition] = propMatch;
+      
+      properties[propName] = {
+        description: description.trim(),
+        definition: propDefinition.trim(),
+        type: this.inferTypeFromDefinition(propDefinition, type)
+      };
     }
     
-    if (objectStart !== -1) {
-      // Find the matching closing parenthesis
-      let parenCount = 0;
-      let i = objectStart;
+    // Also parse properties without JSDoc comments
+    const simplePropertyRegex = /([\w]+):\s*([^,}]+)/g;
+    let simplePropMatch;
+    
+    while ((simplePropMatch = simplePropertyRegex.exec(objectContent)) !== null) {
+      const [, propName, propDefinition] = simplePropMatch;
       
-      // Find the opening parenthesis
-      while (i < schemaText.length && schemaText[i] !== '(') i++;
-      if (i < schemaText.length) {
-        parenCount = 1;
-        i++;
+      if (!properties[propName]) {
+        // Extract description from .describe() calls
+        const describeMatch = propDefinition.match(/\.describe\(['"`]([^'"`]+)['"`]\)/);
+        const description = describeMatch ? describeMatch[1] : '';
         
-        while (i < schemaText.length && parenCount > 0) {
-          if (schemaText[i] === '(') parenCount++;
-          else if (schemaText[i] === ')') parenCount--;
-          i++;
-        }
-        
-        if (parenCount === 0) {
-          objectEnd = i;
-          const objectDef = schemaText.slice(objectStart, objectEnd);
-          return { type: schemaType, body: objectDef };
-        }
+        properties[propName] = {
+          description,
+          definition: propDefinition.trim(),
+          type: this.inferTypeFromDefinition(propDefinition, type)
+        };
       }
     }
     
-    return undefined;
+    return properties;
+  }
+  
+  private parseClassProperties(classBody: string): any {
+    const properties: any = {};
+    
+    // Parse class properties with decorators
+    const propertyRegex = /\/\*\*\s*([^*]+)\s*\*\/[\s\S]*?@[\w\(\)\s,]*\s*([\w]+):\s*([^;]+)/g;
+    let match;
+    
+    while ((match = propertyRegex.exec(classBody)) !== null) {
+      const [, description, propName, propType] = match;
+      
+      properties[propName] = {
+        description: description.trim(),
+        type: propType.trim(),
+        decorators: this.extractDecorators(classBody, propName)
+      };
+    }
+    
+    return properties;
+  }
+  
+  private extractDecorators(classBody: string, propName: string): string[] {
+    const decorators: string[] = [];
+    const lines = classBody.split('\n');
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(`${propName}:`)) {
+        // Look backwards for decorators
+        for (let j = i - 1; j >= 0; j--) {
+          const line = lines[j].trim();
+          if (line.startsWith('@')) {
+            decorators.unshift(line);
+          } else if (line && !line.startsWith('/**') && !line.includes('*/')) {
+            break;
+          }
+        }
+        break;
+      }
+    }
+    
+    return decorators;
+  }
+  
+  private findTypeScriptInterface(content: string, interfaceName: string): ValidationSchema | undefined {
+    // Find interface or type definition
+    const interfaceRegex = new RegExp(`(?:export\s+)?(?:interface|type)\s+${interfaceName}\s*[={]([\s\S]*?)\n}`, 'm');
+    const match = interfaceRegex.exec(content);
+    
+    if (!match) return undefined;
+    
+    const interfaceBody = match[1];
+    const properties = this.parseTypeScriptInterface(interfaceBody);
+    
+    return {
+      type: 'zod', // Use zod as default type for interfaces
+      body: match[0],
+      properties
+    };
+  }
+  
+  private parseTypeScriptInterface(interfaceBody: string): any {
+    const properties: any = {};
+    
+    // Parse interface properties with JSDoc comments
+    const lines = interfaceBody.split('\n');
+    let currentComment = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Capture JSDoc comment
+      if (line.startsWith('/**')) {
+        currentComment = line.replace(/\/\*\*\s*/, '').replace(/\s*\*\//, '').trim();
+        continue;
+      }
+      
+      // Parse property definition
+      const propMatch = line.match(/^([\w]+)(\?)?:\s*([^;,]+)/);
+      if (propMatch) {
+        const [, propName, optional, propType] = propMatch;
+        
+        properties[propName] = {
+          description: currentComment || '',
+          type: this.mapTypeScriptTypeToSwagger(propType.trim()),
+          required: !optional,
+          tsType: propType.trim()
+        };
+        
+        currentComment = ''; // Reset comment
+      }
+    }
+    
+    return properties;
+  }
+  
+  private mapTypeScriptTypeToSwagger(tsType: string): string {
+    // Map TypeScript types to Swagger types
+    if (tsType === 'string') return 'string';
+    if (tsType === 'number') return 'number';
+    if (tsType === 'boolean') return 'boolean';
+    if (tsType.startsWith('string[]') || tsType.startsWith('Array<string>')) return 'array';
+    if (tsType.startsWith('number[]') || tsType.startsWith('Array<number>')) return 'array';
+    if (tsType.includes('[]') || tsType.startsWith('Array<')) return 'array';
+    if (tsType.includes('{') || tsType.includes('|')) return 'object';
+    
+    // Default to string for unknown types
+    return 'string';
+  }
+  
+  private loadExternalTypeScriptInterface(interfaceName: string, importPath: string, currentFilePath: string): ValidationSchema | undefined {
+    try {
+      const resolvedPath = path.resolve(path.dirname(currentFilePath), importPath + '.ts');
+      if (!fs.existsSync(resolvedPath)) {
+        return undefined;
+      }
+      
+      const externalContent = fs.readFileSync(resolvedPath, 'utf-8');
+      return this.findTypeScriptInterface(externalContent, interfaceName);
+    } catch {
+      return undefined;
+    }
+  }
+  
+  private inferTypeFromDefinition(definition: string, schemaType: 'zod' | 'joi'): string {
+    if (schemaType === 'zod') {
+      if (definition.includes('z.string')) return 'string';
+      if (definition.includes('z.number')) return 'number';
+      if (definition.includes('z.boolean')) return 'boolean';
+      if (definition.includes('z.array')) return 'array';
+      if (definition.includes('z.object')) return 'object';
+    } else {
+      if (definition.includes('Joi.string')) return 'string';
+      if (definition.includes('Joi.number')) return 'number';
+      if (definition.includes('Joi.boolean')) return 'boolean';
+      if (definition.includes('Joi.array')) return 'array';
+      if (definition.includes('Joi.object')) return 'object';
+    }
+    
+    return 'string';
   }
 
   private extractValidation(content: string, startIndex: number, imports: Map<string, string>, filePath: string): ValidationSchema | undefined {

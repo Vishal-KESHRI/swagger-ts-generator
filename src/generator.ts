@@ -56,7 +56,7 @@ export class SwaggerGenerator {
     if (route.validation?.responses) {
       operation.responses = {};
       Object.keys(route.validation.responses).forEach(statusCode => {
-        const responseSchema = this.convertValidationToSchema(route.validation!.responses![statusCode], route.validation!.type);
+        const responseSchema = this.convertValidationToSchema(route.validation!.responses![statusCode], route.validation!.type, route.validation!.properties);
         const responseDescription = this.extractResponseDescription(route.validation!.responses![statusCode], statusCode, route.validation!.type);
         operation.responses[statusCode] = {
           description: responseDescription,
@@ -82,7 +82,7 @@ export class SwaggerGenerator {
 
     // Add request body only for POST/PUT/PATCH methods
     if (route.validation?.body && ['POST', 'PUT', 'PATCH'].includes(route.method)) {
-      const schema = this.convertValidationToSchema(route.validation.body, route.validation.type);
+      const schema = this.convertValidationToSchema(route.validation.body, route.validation.type, route.validation.properties);
       operation.requestBody = {
         required: true,
         content: {
@@ -98,7 +98,7 @@ export class SwaggerGenerator {
       operation.parameters = [];
       
       if (route.validation.params) {
-        const paramSchema = this.convertValidationToSchema(route.validation.params, route.validation.type);
+        const paramSchema = this.convertValidationToSchema(route.validation.params, route.validation.type, route.validation.properties);
         if (paramSchema.properties) {
           Object.keys(paramSchema.properties).forEach(paramName => {
             operation.parameters.push({
@@ -112,7 +112,7 @@ export class SwaggerGenerator {
       }
 
       if (route.validation.query) {
-        const querySchema = this.convertValidationToSchema(route.validation.query, route.validation.type);
+        const querySchema = this.convertValidationToSchema(route.validation.query, route.validation.type, route.validation.properties);
         if (querySchema.properties) {
           Object.keys(querySchema.properties).forEach(queryName => {
             operation.parameters.push({
@@ -126,7 +126,7 @@ export class SwaggerGenerator {
       }
 
       if (route.validation.headers) {
-        const headerSchema = this.convertValidationToSchema(route.validation.headers, route.validation.type);
+        const headerSchema = this.convertValidationToSchema(route.validation.headers, route.validation.type, route.validation.properties);
         if (headerSchema.properties) {
           Object.keys(headerSchema.properties).forEach(headerName => {
             operation.parameters.push({
@@ -143,7 +143,59 @@ export class SwaggerGenerator {
     spec.paths[path][method] = operation;
   }
 
-  private convertValidationToSchema(validation: any, type: 'zod' | 'joi' | 'class-validator'): any {
+  private convertValidationToSchema(validation: any, type: 'zod' | 'joi' | 'class-validator', properties?: Record<string, any>): any {
+    // If we have parsed properties, use them to build a better schema
+    if (properties && Object.keys(properties).length > 0) {
+      const schema: any = {
+        type: 'object',
+        properties: {},
+        required: []
+      };
+      
+      Object.keys(properties).forEach(propName => {
+        const prop = properties[propName];
+        const propSchema: any = {
+          type: prop.type || 'string'
+        };
+        
+        // Add description if available
+        if (prop.description) {
+          propSchema.description = prop.description;
+        }
+        
+        // Add format for specific types
+        if (prop.tsType === 'string' && prop.description?.toLowerCase().includes('email')) {
+          propSchema.format = 'email';
+        }
+        
+        // Add array items if it's an array type
+        if (prop.type === 'array') {
+          if (prop.tsType?.includes('string')) {
+            propSchema.items = { type: 'string' };
+          } else if (prop.tsType?.includes('number')) {
+            propSchema.items = { type: 'number' };
+          } else {
+            propSchema.items = { type: 'object' };
+          }
+        }
+        
+        schema.properties[propName] = propSchema;
+        
+        // Check if property is required
+        if (prop.required !== false && (!prop.definition || !prop.definition.includes('optional()'))) {
+          schema.required.push(propName);
+        }
+      });
+      
+      // Remove empty required array
+      if (schema.required.length === 0) {
+        delete schema.required;
+      }
+      
+      return schema;
+    }
+    
+    // Fallback to existing converters
     if (type === 'zod') {
       return ZodToSwagger.convert(validation);
     } else if (type === 'joi') {
