@@ -30,11 +30,11 @@
   "stability": "stable",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Vishal-KESHRI/swagger-ts-generator.git"
+    "url": "https://github.com/Vishal-KESHRI/swagger-genius.git"
   },
-  "homepage": "https://github.com/Vishal-KESHRI/swagger-ts-generator#readme",
+  "homepage": "https://github.com/Vishal-KESHRI/swagger-genius#readme",
   "bugs": {
-    "url": "https://github.com/Vishal-KESHRI/swagger-ts-generator/issues"
+    "url": "https://github.com/Vishal-KESHRI/swagger-genius/issues"
   },
   "dependencies": {
     "glob": "^10.3.0",
