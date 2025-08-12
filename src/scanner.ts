@@ -154,13 +154,21 @@ export class ProjectScanner {
       
       // Look for @UseBefore
       if (!foundUseBefore && line.includes('@UseBefore')) {
-        const useBeforeMatch = line.match(/@UseBefore\(RequestValidatorMiddleware\.validate\((\w+)\)/);
-        if (useBeforeMatch) {
-          const schemaName = useBeforeMatch[1];
+        // Pattern 1: Simple validation - @UseBefore(RequestValidatorMiddleware.validate(SchemaName))
+        const simpleMatch = line.match(/@UseBefore\(RequestValidatorMiddleware\.validate\((\w+)\)/);
+        if (simpleMatch) {
+          const schemaName = simpleMatch[1];
           const schema = this.resolveSchema(schemaName, content, imports, filePath);
           if (schema) {
             validation.body = schema.body;
             validation.properties = schema.properties;
+            foundUseBefore = true;
+          }
+        } else {
+          // Pattern 2: Complex validation - @UseBefore(RequestValidatorMiddleware({ ... }))
+          const complexMatch = this.extractComplexMiddleware(beforeMethod, i, imports, filePath);
+          if (complexMatch) {
+            Object.assign(validation, complexMatch);
             foundUseBefore = true;
           }
         }
@@ -188,6 +196,73 @@ export class ProjectScanner {
       const schema = this.resolveSchema(responseType, content, imports, filePath);
       if (schema) {
         validation.responses = { '200': schema.body };
+      }
+    }
+    
+    return Object.keys(validation).length > 1 ? validation : undefined;
+  }
+  
+  private extractComplexMiddleware(beforeMethod: string, startLineIndex: number, imports: Map<string, string>, filePath: string): ValidationSchema | undefined {
+    const lines = beforeMethod.split('\n');
+    const validation: ValidationSchema = { type: 'zod' };
+    
+    // Look for @UseBefore(RequestValidatorMiddleware({ ... })) pattern
+    let middlewareContent = '';
+    let braceCount = 0;
+    let foundStart = false;
+    
+    for (let i = startLineIndex; i < lines.length; i++) {
+      const line = lines[i];
+      middlewareContent += line + '\n';
+      
+      // Count braces to find the complete middleware object
+      for (const char of line) {
+        if (char === '{') {
+          braceCount++;
+          foundStart = true;
+        } else if (char === '}') {
+          braceCount--;
+        }
+      }
+      
+      // Stop when we've closed all braces
+      if (foundStart && braceCount === 0) {
+        break;
+      }
+    }
+    
+    // Extract schemas from the middleware object
+    const bodyMatch = middlewareContent.match(/body:\s*(\w+)/);
+    const queryMatch = middlewareContent.match(/query:\s*(\w+)/);
+    const headersMatch = middlewareContent.match(/headers:\s*(\w+)/);
+    const paramsMatch = middlewareContent.match(/params:\s*(\w+)/);
+    
+    if (bodyMatch) {
+      const schema = this.resolveSchema(bodyMatch[1], beforeMethod, imports, filePath);
+      if (schema) {
+        validation.body = schema.body;
+        validation.properties = schema.properties;
+      }
+    }
+    
+    if (queryMatch) {
+      const schema = this.resolveSchema(queryMatch[1], beforeMethod, imports, filePath);
+      if (schema) {
+        validation.query = schema.body;
+      }
+    }
+    
+    if (headersMatch) {
+      const schema = this.resolveSchema(headersMatch[1], beforeMethod, imports, filePath);
+      if (schema) {
+        validation.headers = schema.body;
+      }
+    }
+    
+    if (paramsMatch) {
+      const schema = this.resolveSchema(paramsMatch[1], beforeMethod, imports, filePath);
+      if (schema) {
+        validation.params = schema.body;
       }
     }
     
